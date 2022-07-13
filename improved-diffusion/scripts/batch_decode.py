@@ -84,6 +84,7 @@ for lst in full_lst:
     # num_samples = 512
 
     # out_dir = 'diffusion_lm/improved_diffusion/out_gen_v2_nucleus'
+    modality='e2e-tgt'
 
     out_dir = 'generation_outputs'
     num_samples = 50
@@ -113,38 +114,38 @@ for lst in full_lst:
 
     output_lst.append(out_path2)
 
-    if modality == 'pos':
-        model_name_path = 'predictability/diff_models/pos_e=15_b=20_m=gpt2_wikitext-103-raw-v1_s=102'
-    elif modality == 'synth':
-        if kk == 128:
-            model_name_path = 'predictability/diff_models/synth_e=15_b=10_m=gpt2_wikitext-103-raw-v1_None'
-        else:
-            model_name_path = 'predictability/diff_models/synth_e=15_b=20_m=gpt2_wikitext-103-raw-v1_None'
-    elif modality == 'e2e-tgt':
-        model_name_path = "predictability/diff_models/e2e-tgt_e=15_b=20_m=gpt2_wikitext-103-raw-v1_101_None"
-    elif modality == 'roc':
-        model_name_path = "predictability/diff_models/roc_e=6_b=10_m=gpt2_wikitext-103-raw-v1_101_wp_pad_v1"
-    elif modality == 'e2e':
-        COMMAND1 = f"python diffusion_lm/e2e_data/mbr.py {out_path2}"
-
-        os.system(COMMAND1)
-        COMMAND2 = f"python e2e-metrics/measure_scores.py " \
-                   f"diffusion_lm/improved_diffusion/out_gen_v2_dropout2/1_valid_gold  " \
-                   f"{out_path2}.clean -p  -t -H > {os.path.join(os.path.split(tgt)[0], 'e2e_valid_eval.txt')}"
-        print(COMMAND2)
-        os.system(COMMAND2)
-        continue
-    else:
-        print('not trained a AR model yet... only look at the output plz.')
-        continue
-    COMMAND = f"python scripts/ppl_under_ar.py " \
-              f"--model_path {tgt} " \
-              f"--modality {modality}  --experiment random " \
-              f"--model_name_or_path {model_name_path} " \
-              f"--input_text {out_path2}  --mode eval"
-
-    print(COMMAND)
-    print()
-    os.system(COMMAND)
-print('output lists:')
-print("\n".join(output_lst))
+#     if modality == 'pos':
+#         model_name_path = 'predictability/diff_models/pos_e=15_b=20_m=gpt2_wikitext-103-raw-v1_s=102'
+#     elif modality == 'synth':
+#         if kk == 128:
+#             model_name_path = 'predictability/diff_models/synth_e=15_b=10_m=gpt2_wikitext-103-raw-v1_None'
+#         else:
+#             model_name_path = 'predictability/diff_models/synth_e=15_b=20_m=gpt2_wikitext-103-raw-v1_None'
+#     elif modality == 'e2e-tgt':
+#         model_name_path = "predictability/diff_models/e2e-tgt_e=15_b=20_m=gpt2_wikitext-103-raw-v1_101_None"
+#     elif modality == 'roc':
+#         model_name_path = "predictability/diff_models/roc_e=6_b=10_m=gpt2_wikitext-103-raw-v1_101_wp_pad_v1"
+#     elif modality == 'e2e':
+#         COMMAND1 = f"python diffusion_lm/e2e_data/mbr.py {out_path2}"
+#
+#         os.system(COMMAND1)
+#         COMMAND2 = f"python e2e-metrics/measure_scores.py " \
+#                    f"diffusion_lm/improved_diffusion/out_gen_v2_dropout2/1_valid_gold  " \
+#                    f"{out_path2}.clean -p  -t -H > {os.path.join(os.path.split(tgt)[0], 'e2e_valid_eval.txt')}"
+#         print(COMMAND2)
+#         os.system(COMMAND2)
+#         continue
+#     else:
+#         print('not trained a AR model yet... only look at the output plz.')
+#         continue
+#     COMMAND = f"python scripts/ppl_under_ar.py " \
+#               f"--model_path {tgt} " \
+#               f"--modality {modality}  --experiment random " \
+#               f"--model_name_or_path {model_name_path} " \
+#               f"--input_text {out_path2}  --mode eval"
+#
+#     print(COMMAND)
+#     print()
+#     os.system(COMMAND)
+# print('output lists:')
+# print("\n".join(output_lst))
