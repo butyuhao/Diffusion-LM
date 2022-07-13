@@ -31,7 +31,8 @@ def main():
 
     dist_util.setup_dist()
     logger.configure()
-
+    from ipdb import set_trace
+    set_trace()
     # load configurations.
     config_path = os.path.join(os.path.split(args.model_path)[0], "training_args.json")
     print(config_path)
@@ -54,7 +55,8 @@ def main():
     )
 
     pytorch_total_params = sum(p.numel() for p in model.parameters())
-    logger.log(f'the parameter count is {pytorch_total_params}')
+
+    logger.log(f" the parameter count is {pytorch_total_params} ")
 
     # diffusion.rescale_timesteps = False  # DEBUG --> REMOVE
     print(diffusion.rescale_timesteps, 'a marker for whether we are in the debug mode')

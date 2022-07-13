@@ -51,17 +51,17 @@ class ScheduleSampler(ABC):
         """
         w = self.weights()
         p = w / np.sum(w)
-        indices_np = np.random.choice(len(p), size=(batch_size,), p=p)
+        indices_np = np.random.choice(len(p), size=(batch_size,), p=p) # 等价于np.random.randint(0,len(p),概率) # 也就是以概率p，从steps中采样
         indices = th.from_numpy(indices_np).long().to(device)
         weights_np = 1 / (len(p) * p[indices_np])
         weights = th.from_numpy(weights_np).float().to(device)
-        return indices, weights
+        return indices, weights # 从设置的step中采样step，并且附上每个t被采样到的weight。
 
 
 class UniformSampler(ScheduleSampler):
     def __init__(self, diffusion):
         self.diffusion = diffusion
-        self._weights = np.ones([diffusion.num_timesteps])
+        self._weights = np.ones([diffusion.num_timesteps]) # 2000个step各来一次
 
     def weights(self):
         return self._weights

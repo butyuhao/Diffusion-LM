@@ -27,15 +27,18 @@ import wandb
 def main():
     args = create_argparser().parse_args()
     set_seed(args.seed) 
-    dist_util.setup_dist() # DEBUG **
+    # dist_util.setup_dist() # DEBUG **
     logger.configure()
+    if 'makeup' in args.e2e_train:
+        args.config_name = 'bert-base-chinese'
 
 
     logger.log("creating model and diffusion...")
     model, diffusion = create_model_and_diffusion(
         **args_to_dict(args, model_and_diffusion_defaults().keys())
     )
-    model.to(dist_util.dev()) #  DEBUG **
+    args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    model.to(args.device) #  DEBUG ** cuda：0
     # model.cuda() #  DEBUG **
 
     pytorch_total_params = sum(p.numel() for p in model.parameters())
@@ -44,14 +47,15 @@ def main():
     schedule_sampler = create_named_schedule_sampler(args.schedule_sampler, diffusion)
 
     logger.log(f'saving the hyperparameters to {args.checkpoint_path}/training_args.json')
-    with open(f'{args.checkpoint_path}/training_args.json', 'w') as f:
+    with open(f'{args.checkpoint_path}/training_args.json', 'w') as f: # 将训练的args保存起来
         json.dump(args.__dict__, f, indent=2)
-
-    wandb.init(
+    wandb.login(key="5f59ae12d58529ba9dcfcfc6a2284a6560523095")
+    wandb.init( # 初始化wandb
         project=os.getenv("WANDB_PROJECT", "diffusion_lm"),
         name=args.checkpoint_path,
+
     )
-    wandb.config.update(args.__dict__, allow_val_change=True)
+    wandb.config.update(args.__dict__, allow_val_change=True) # 训练args保存到wandb
 
     if args.experiment_mode == 'conditional_gen':
         assert args.modality in ['e2e']
@@ -91,7 +95,7 @@ def main():
             model22.weight.requires_grad=False
         else:
             model22 = None
-
+        # rev_tokenizer 和 model22都是None
         data = load_data_text(
             data_dir=args.data_dir,
             batch_size=args.batch_size,
@@ -103,7 +107,7 @@ def main():
             load_vocab=rev_tokenizer,
             model=model22,
         )
-        next(data)
+
         model2, tokenizer = load_models(args.modality, args.experiment, args.model_name_or_path, args.in_channel,
                                         args.checkpoint_path, extra_args=args)
         if args.modality == 'book' or args.use_bert_tokenizer == 'yes':
@@ -111,7 +115,7 @@ def main():
         else:
             rev_tokenizer = {v: k for k, v in tokenizer.items()}
 
-        data_valid = load_data_text(
+        data_valid = load_data_text( # 创建数据集，并用dataloader封装然后返回
             data_dir=args.data_dir,
             batch_size=args.batch_size,
             image_size=args.image_size,
@@ -131,10 +135,10 @@ def main():
     def get_mapping_func(args, diffusion, data):
         model2, tokenizer = load_models(args.modality, args.experiment, args.model_name_or_path, args.in_channel,
                                         args.checkpoint_path, extra_args=args)
-        model3 = get_weights(model2, args)
+        model3 = get_weights(model2, args) # model3是随机初始化的词embedding的weight
         print(model3, model3.weight.requires_grad)
-        mapping_func = partial(compute_logp, args, model3.cuda())
-        diffusion.mapping_func = mapping_func
+        mapping_func = partial(compute_logp, args, model3.to(args.device)) # 看起来像是rounding的时候用的
+        diffusion.mapping_func = mapping_func # 将diffusion中的mapping_func改为上方定义的这个
         return mapping_func
 
     get_mapping_func(args, diffusion, data)
@@ -144,22 +148,23 @@ def main():
         model=model,
         diffusion=diffusion,
         data=data,
-        batch_size=args.batch_size,
-        microbatch=args.microbatch,
-        lr=args.lr,
-        ema_rate=args.ema_rate,
-        log_interval=args.log_interval,
-        save_interval=args.save_interval,
-        resume_checkpoint=args.resume_checkpoint,
-        use_fp16=args.use_fp16,
+        batch_size=args.batch_size, # 64
+        microbatch=args.microbatch, # -1
+        lr=args.lr, # 0.0001
+        ema_rate=args.ema_rate, # 0.999
+        log_interval=args.log_interval, # 50
+        save_interval=args.save_interval, # 50000
+        resume_checkpoint=args.resume_checkpoint, # "
+        use_fp16=args.use_fp16, # false
         fp16_scale_growth=args.fp16_scale_growth,
-        schedule_sampler=schedule_sampler,
-        weight_decay=args.weight_decay,
-        lr_anneal_steps=args.lr_anneal_steps,
-        checkpoint_path=args.checkpoint_path,
-        gradient_clipping=args.gradient_clipping,
+        schedule_sampler=schedule_sampler, # uniform
+        weight_decay=args.weight_decay, # 0.0
+        lr_anneal_steps=args.lr_anneal_steps, # 200000 这个参数似乎没有被用到
+        checkpoint_path=args.checkpoint_path, # 保存state_dict的文件夹
+        gradient_clipping=args.gradient_clipping,# -1
         eval_data=data_valid,
-        eval_interval=args.eval_interval
+        eval_interval=args.eval_interval, # 2000
+        args=args
     ).run_loop()
 
 

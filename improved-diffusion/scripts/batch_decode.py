@@ -1,3 +1,4 @@
+# 先调用text_sample.py采样并生成文本，然后调用已有的模型，使用ppl_under_ar.py计算生成文本的ppl
 import os, sys, glob
 # full_lst = glob.glob('diff_models_synth128*')
 # full_lst = glob.glob('diff_models_synth32*')

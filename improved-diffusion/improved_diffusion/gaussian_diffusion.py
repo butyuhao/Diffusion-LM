@@ -195,10 +195,10 @@ class GaussianDiffusion:
 
         self.num_timesteps = int(betas.shape[0])
 
-        alphas = 1.0 - betas
-        self.alphas_cumprod = np.cumprod(alphas, axis=0)
-        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1])
-        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0)
+        alphas = 1.0 - betas # 文章中的alpha
+        self.alphas_cumprod = np.cumprod(alphas, axis=0) # alpha_t_bar
+        self.alphas_cumprod_prev = np.append(1.0, self.alphas_cumprod[:-1]) # alpha_t-1_bar
+        self.alphas_cumprod_next = np.append(self.alphas_cumprod[1:], 0.0) # alpha_t+1_bar
         assert self.alphas_cumprod_prev.shape == (self.num_timesteps,)
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
@@ -209,18 +209,18 @@ class GaussianDiffusion:
         self.sqrt_recipm1_alphas_cumprod = np.sqrt(1.0 / self.alphas_cumprod - 1)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
-        self.posterior_variance = (
+        self.posterior_variance = ( # 后验中的方差
             betas * (1.0 - self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         )
         # log calculation clipped because the posterior variance is 0 at the
         # beginning of the diffusion chain.
-        self.posterior_log_variance_clipped = np.log(
+        self.posterior_log_variance_clipped = np.log( # 因为第一项的variance是0，而log 0 会有问题，所以用第一项的值来代替第0项的值
             np.append(self.posterior_variance[1], self.posterior_variance[1:])
         )
-        self.posterior_mean_coef1 = (
+        self.posterior_mean_coef1 = ( # 后验均值项中的系数1
             betas * np.sqrt(self.alphas_cumprod_prev) / (1.0 - self.alphas_cumprod)
         )
-        self.posterior_mean_coef2 = (
+        self.posterior_mean_coef2 = ( # 后验均值项中的系数2
             (1.0 - self.alphas_cumprod_prev)
             * np.sqrt(alphas)
             / (1.0 - self.alphas_cumprod)
@@ -269,7 +269,7 @@ class GaussianDiffusion:
     def q_sample(self, x_start, t, noise=None):
         """
         Diffuse the data for a given number of diffusion steps.
-
+        前向过程，由x_0和t直接得到x_t
         In other words, sample from q(x_t | x_0).
 
         :param x_start: the initial data batch.
@@ -278,7 +278,7 @@ class GaussianDiffusion:
         :return: A noisy version of x_start.
         """
         if noise is None:
-            noise = th.randn_like(x_start)
+            noise = th.randn_like(x_start) # [64, 64, 16] [bs, seq_len, dim]
         assert noise.shape == x_start.shape
         return (
             _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
@@ -1467,7 +1467,7 @@ class GaussianDiffusion:
         """
         assert 'input_ids' in model_kwargs
         input_ids = model_kwargs.pop('input_ids').to(t.device)
-        x_start_mean = model.model.module.get_embeds(input_ids)
+        x_start_mean = model.model.get_embeds(input_ids) # x_0的均值当然就是他自己的啊,是过了word embedding之后的输出
         if self.model_arch == 'conv-unet':
             seqlen = int(np.sqrt(input_ids.size(1)))
             x_start_mean = x_start_mean.view(x_start_mean.size(0), seqlen, seqlen, x_start_mean.size(-1)).permute(0, 3,
@@ -1479,12 +1479,12 @@ class GaussianDiffusion:
                                    x_start_mean.shape)
         # print(std.shape, )
         x_start_log_var = 2 * th.log(std)
-        x_start = self.get_x_start(x_start_mean, std)
+        x_start = self.get_x_start(x_start_mean, std) # 均值加上标准差，x_0，以为它就是原来的向量，但事实上x_0就已经被加上了标准差，是一个分布
         # print(x_start_mean.shape, x_start.shape)
         if noise is None:
             noise = th.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise=noise) # reparametrization trick.
-        get_logits = model.model.module.get_logits
+        get_logits = model.model.get_logits # 用transformer的lm_head()
 
         terms = {}
 
@@ -1508,7 +1508,7 @@ class GaussianDiffusion:
         elif self.loss_type == LossType.E2E_MSE or self.loss_type == LossType.E2E_RESCALED_MSE:
             # print(x_t.shape)
             model_output = model(x_t, self._scale_timesteps(t), **model_kwargs)
-
+            # 这边的scale是0.5,为啥要把所有的t都乘以0.5呢？暂时不太懂
             if self.model_var_type in [
                 ModelVarType.LEARNED,
                 ModelVarType.LEARNED_RANGE,
@@ -1549,22 +1549,27 @@ class GaussianDiffusion:
             target = {
                 ModelMeanType.PREVIOUS_X: self.q_posterior_mean_variance(
                     x_start=x_start, x_t=x_t, t=t
-                )[0],
+                )[0], # posterior_mean
                 ModelMeanType.START_X: x_start,
                 ModelMeanType.EPSILON: noise,
-            }[self.model_mean_type]
+            }[self.model_mean_type] # target = ModelMeanTypes.START_X
             assert model_output.shape == target.shape == x_start.shape
-            terms["mse"] = mean_flat((target - model_output) ** 2)
+            terms["mse"] = mean_flat((target - model_output) ** 2) # (x_0 - f_theta(x_t, t))^2 这一项是Loss_e2e_x0_simple # target
+
             # print( terms["mse"])
             model_out_x_start = self.x0_helper(model_output, x_t, t)['pred_xstart']
-            t0_mask = (t == 0)
-            t0_loss = mean_flat((x_start_mean - model_out_x_start) ** 2)
+            t0_mask = (t == 0) # 在 mse 中将t==0的情况去掉
+            t0_loss = mean_flat((x_start_mean - model_out_x_start) ** 2) # t_0的loss在这边更新
             # print(terms["mse"].shape, )
             terms["mse"] = th.where(t0_mask, t0_loss, terms["mse"])
 
             # tT_mask = (t == self.num_timesteps - 1)
             out_mean, _, _ = self.q_mean_variance(x_start, th.LongTensor([self.num_timesteps - 1]).to(x_start.device))
+
+            out_mean_1, _, _ = self.q_mean_variance(x_start, th.LongTensor([1]).to(x_start.device))
+
             tT_loss =  mean_flat(out_mean ** 2)
+            t_1_loss = mean_flat((x_start_mean - out_mean_1)**2)
 
             decoder_nll = self.token_discrete_loss(x_start, get_logits, input_ids)
 
@@ -1574,7 +1579,10 @@ class GaussianDiffusion:
                 terms["loss"] = terms["mse"] + terms["vb"]
             else:
                 # KEY
-                terms["loss"] = terms["mse"] + (decoder_nll + tT_loss)
+                # terms["loss"] = terms["mse"] + (decoder_nll + tT_loss)
+
+                terms["loss"] = terms["mse"] + (decoder_nll + t_1_loss)
+
                 # terms["loss"] = terms["mse"] + (1.0/self.num_timesteps) * decoder_nll + \
                 #                 (1.0/self.num_timesteps) * tT_loss
         else:
@@ -1598,7 +1606,7 @@ class GaussianDiffusion:
         assert 'input_ids' in model_kwargs
         x_start = None
         input_ids = model_kwargs.pop('input_ids').to(t.device)
-        x_start_mean = model.model.module.get_embeds(input_ids)
+        x_start_mean = model.model.get_embeds(input_ids)
         if self.model_arch == 'conv-unet':
             seqlen = int(np.sqrt(input_ids.size(1)))
             x_start_mean = x_start_mean.view(x_start_mean.size(0), seqlen, seqlen, x_start_mean.size(-1)).permute(0, 3,
@@ -1610,7 +1618,7 @@ class GaussianDiffusion:
         if noise is None:
             noise = th.randn_like(x_start)
         x_t = self.q_sample(x_start, t, noise=noise) # reparametrization trick.
-        get_logits = model.model.module.get_logits
+        get_logits = model.model.get_logits
 
         terms = {}
 
@@ -1892,7 +1900,7 @@ class GaussianDiffusion:
 def _extract_into_tensor(arr, timesteps, broadcast_shape):
     """
     Extract values from a 1-D numpy array for a batch of indices.
-
+    从arr中选出第timesteps个，然后变成broadcast_shape的形状返回
     :param arr: the 1-D numpy array.
     :param timesteps: a tensor of indices into the array to extract.
     :param broadcast_shape: a larger shape of K dimensions with the batch

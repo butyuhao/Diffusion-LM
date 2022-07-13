@@ -39,11 +39,11 @@ def load_models(modality, mode, model_name_or_path, emb_dim, file, extra_args=No
                 path_save_tokenizer = '{}/vocab.json'.format(file)
                 print(f'loading from {path_save_tokenizer}')
                 with open(path_save_tokenizer, 'r') as f:
-                    vocab = json.load(f)
+                    vocab = json.load(f) # 从刚才load train data保存的vocab中构建tokenizer，并创建embedding。所以tokenizer中仅含有train中出现过的词语。
                 print(len(vocab))
                 tokenizer = {v: k for k, v in vocab.items()}
             model = torch.nn.Embedding(len(tokenizer), emb_dim)
-            path_save = '{}/random_emb.torch'.format(file)
+            path_save = '{}/random_emb.torch'.format(file) # 将随机初始化的词向量的weight保存起来
             model.load_state_dict(torch.load(path_save))
 
     return model, tokenizer

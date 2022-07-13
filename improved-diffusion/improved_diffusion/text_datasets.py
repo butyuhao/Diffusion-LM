@@ -1,6 +1,6 @@
 # from PIL import Image
 # import blobfile as bf
-from mpi4py import MPI
+# from mpi4py import MPI
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoModelForCausalLM, AutoConfig, AutoTokenizer, default_data_collator, PreTrainedTokenizerFast, \
@@ -112,8 +112,7 @@ def load_data_text(
             shuffle=True,
             num_workers=1,
         )
-    while True:
-        yield from data_loader
+    return data_loader
 
 def helper_tokenize_encode_cond(sentence_lst, vocab_dict, model, seqlen, data_args):
     result_train_lst = []
@@ -312,6 +311,9 @@ def get_corpus_rocstory(data_args, model, image_size, padding_mode='block',
                         split='train', load_vocab=None):
     import csv, torch, json
     from spacy.lang.en import English
+
+    if 'makeup_data' in data_args.e2e_train:
+        from spacy.lang.zh import Chinese as English
 
     if data_args.experiment_mode == 'lm':
         if data_args.modality == 'roc':
@@ -547,10 +549,13 @@ def get_corpus_rocstory(data_args, model, image_size, padding_mode='block',
                 counter.update(input_ids)
                 counter.update(src_ids)
 
+    filter_threshold = 10
+    if 'makeup_data' in data_args.e2e_train:
+        filter_threshold = 1
     if load_vocab is None:
         vocab_dict = {'START': 0, 'END': 1, 'UNK':2, 'PAD':3}
         for k, v in counter.items():
-            if v > 10:
+            if v > filter_threshold:
                 vocab_dict[k] = len(vocab_dict)
         print(len(counter), len(vocab_dict))
 
@@ -572,7 +577,8 @@ def get_corpus_rocstory(data_args, model, image_size, padding_mode='block',
             else:
                 assert False, "invalid type of vocab_dict"
 
-
+    from ipdb import set_trace
+    # set_trace()
 
     if model is None and data_args.experiment == 'random':
         model = torch.nn.Embedding(len(vocab_dict), data_args.in_channel)

@@ -70,12 +70,12 @@ class SpacedDiffusion(GaussianDiffusion):
     """
 
     def __init__(self, use_timesteps, **kwargs):
-        self.use_timesteps = set(use_timesteps)
+        self.use_timesteps = set(use_timesteps) # [0-1999]
         self.timestep_map = []
-        self.original_num_steps = len(kwargs["betas"])
+        self.original_num_steps = len(kwargs["betas"]) # 2000
 
         # print(kwargs.keys())
-        base_diffusion = GaussianDiffusion(**kwargs)  # pylint: disable=missing-kwoa
+        base_diffusion = GaussianDiffusion(**kwargs)  # pylint: disable=missing-kwoa 放一堆公式中出现的数字的类
         last_alpha_cumprod = 1.0
         new_betas = []
         for i, alpha_cumprod in enumerate(base_diffusion.alphas_cumprod):
@@ -83,8 +83,8 @@ class SpacedDiffusion(GaussianDiffusion):
                 new_betas.append(1 - alpha_cumprod / last_alpha_cumprod)
                 last_alpha_cumprod = alpha_cumprod
                 self.timestep_map.append(i)
-        kwargs["betas"] = np.array(new_betas)
-        super().__init__(**kwargs)
+        kwargs["betas"] = np.array(new_betas) # new_beta 和 sqrt形状一样
+        super().__init__(**kwargs) # 用new_beta初始化upper class
 
     def p_mean_variance(
         self, model, *args, **kwargs

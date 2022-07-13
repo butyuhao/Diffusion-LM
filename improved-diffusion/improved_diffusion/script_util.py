@@ -96,19 +96,19 @@ def create_model_and_diffusion(
         logits_mode=logits_mode,
     )
     diffusion = create_gaussian_diffusion(
-        steps=diffusion_steps,
-        learn_sigma=learn_sigma,
-        sigma_small=sigma_small,
-        noise_schedule=noise_schedule,
-        use_kl=use_kl,
-        predict_xstart=predict_xstart,
-        rescale_timesteps=rescale_timesteps,
-        rescale_learned_sigmas=rescale_learned_sigmas,
+        steps=diffusion_steps, # 2000
+        learn_sigma=learn_sigma, # False
+        sigma_small=sigma_small, # False
+        noise_schedule=noise_schedule, # sqrt
+        use_kl=use_kl, # False, 也就是用vlb来当loss
+        predict_xstart=predict_xstart, # True 在loss中加入x_0项
+        rescale_timesteps=rescale_timesteps, # True
+        rescale_learned_sigmas=rescale_learned_sigmas,# True
         timestep_respacing=timestep_respacing,
-        model_arch=model_arch,
-        training_mode=training_mode,
+        model_arch=model_arch, # transformer
+        training_mode=training_mode, # e2e
     )
-    return model, diffusion
+    return model, diffusion # model定义了模型，而diffusion中定义了和diffusion相关的系数和计算的函数。
 
 
 def create_model(
@@ -246,12 +246,12 @@ def create_model(
         elif image_size == 16:  # DEBUG**
             channel_mult = (1, 2, 2, 2)
         else:
-            channel_mult = (1, 2, 2, 2)
+            channel_mult = (1, 2, 2, 2) # image_size=8
 
         attention_ds = []
         for res in attention_resolutions.split(","):
             attention_ds.append(image_size // int(res))
-
+        # 上面的attention_ds和channel_mult都没有用到
         return TransformerNetModel2(
             in_channels=in_channel,  # 3, DEBUG**
             model_channels=num_channels,
@@ -390,8 +390,8 @@ def create_gaussian_diffusion(
     model_arch='conv-unet',
     training_mode='emb',
 ):
-    betas = gd.get_named_beta_schedule(noise_schedule, steps)
-    if training_mode == 'e2e':
+    betas = gd.get_named_beta_schedule(noise_schedule, steps) # 根据不同的schedule和steps获取beta值
+    if training_mode == 'e2e': # 决定使用loss的类型，放在loss_type变量中
         # end to end training
         if use_kl:
             loss_type = gd.LossType.E2E_KL
